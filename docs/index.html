@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AevumPay — tUSD8 Invoice, Escrow & Confirmation of Payee on QDay Aevum</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card: #121826;
+      --border: #1f2937;
+      --accent: #38bdf8;
+      --accent2: #22c55e;
+      --text: #f3f4f6;
+      --muted: #9ca3af;
+    }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { margin: 0; background: var(--bg); color: var(--text); padding: 24px; }
+    .wrap { max-width: 980px; margin: 0 auto; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid var(--border); padding-bottom: 18px; margin-bottom: 24px; }
+    h1 { margin: 0; font-size: 1.6rem; color: var(--accent); }
+    .sub { color: var(--muted); font-size: 0.92rem; margin-top: 4px; }
+    .pill { background: #172033; border: 1px solid var(--border); padding: 8px 12px; border-radius: 999px; font-size: 0.85rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px; }
+    .card h2 { margin: 0 0 12px 0; font-size: 1.1rem; }
+    label { display: block; font-size: 0.82rem; color: var(--muted); margin-top: 10px; margin-bottom: 4px; }
+    input, select { width: 100%; background: #0b1120; border: 1px solid var(--border); color: var(--text); padding: 10px; border-radius: 8px; font-size: 0.92rem; }
+    button { margin-top: 14px; background: var(--accent); color: #04101f; border: none; border-radius: 8px; padding: 10px 14px; font-weight: 600; cursor: pointer; width: 100%; }
+    button.secondary { background: #1f2937; color: var(--text); }
+    button.green { background: var(--accent2); color: #04101f; }
+    .row { display: flex; gap: 10px; }
+    #log { margin-top: 20px; background: #070b14; border: 1px solid var(--border); border-radius: 12px; padding: 14px; font-family: monospace; font-size: 0.82rem; min-height: 90px; white-space: pre-wrap; color: #cbd5e1; }
+    .badge { color: var(--accent2); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>AevumPay</h1>
+        <div class="sub">tUSD8 Invoice, Non-Custodial Escrow &amp; Confirmation of Payee on QDay Aevum Testnet (Chain ID 44005)</div>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <span class="pill" id="walletStatus">Not connected</span>
+        <span class="pill" id="balanceStatus">tUSD8: --</span>
+        <button style="margin:0; width:auto;" onclick="connectWallet()">Connect Wallet</button>
+      </div>
+    </header>
+
+    <div class="card" style="margin-bottom:18px;">
+      <div class="row" style="align-items:end; flex-wrap:wrap;">
+        <div style="flex:2; min-width:260px;">
+          <label>AevumInvoiceEscrow Contract Address (QDay Aevum Testnet)</label>
+          <input id="contractAddr" placeholder="0x... (paste deployed AevumInvoiceEscrow address)" />
+        </div>
+        <div style="flex:1; min-width:220px;">
+          <label>Official tUSD8 Token</label>
+          <input value="0x456569838f1d43009A91ebA4263147Afd7233483" readonly />
+        </div>
+        <div style="width:180px;">
+          <button class="secondary" onclick="switchAevumNetwork()">Add / Switch Aevum</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>1. Confirmation of Payee Registry</h2>
+        <label>Payee Handle (e.g. kestrel.aevum)</label>
+        <input id="regHandle" placeholder="kestrel.aevum" />
+        <label>Display Name</label>
+        <input id="regName" placeholder="Kestrel Studio" />
+        <button onclick="registerPayee()">Register Verified Payee</button>
+      </div>
+
+      <div class="card">
+        <h2>2. Create tUSD8 Invoice</h2>
+        <label>Payer Address</label>
+        <input id="invPayer" placeholder="0x..." />
+        <label>Your Verified Handle (optional)</label>
+        <input id="invHandle" placeholder="kestrel.aevum" />
+        <label>Amount (tUSD8)</label>
+        <input id="invAmount" type="number" step="0.01" value="25" />
+        <label>Settlement Mode</label>
+        <select id="invMode">
+          <option value="escrow">Escrow (Requires Payer Release / Window)</option>
+          <option value="instant">Instant Settlement on Funding</option>
+        </select>
+        <label>Reference / Memo</label>
+        <input id="invMemo" placeholder="INV-2026-001" />
+        <button onclick="createInvoice()">Create On-Chain Invoice</button>
+      </div>
+
+      <div class="card">
+        <h2>3. Pay or Release Invoice</h2>
+        <label>Invoice ID</label>
+        <input id="actId" type="number" value="1" />
+        <label>Expected Payee Handle (Confirmation of Payee)</label>
+        <input id="actHandle" placeholder="kestrel.aevum" />
+        <div class="row">
+          <button class="green" onclick="fundInvoice()">Approve &amp; Fund tUSD8</button>
+          <button class="secondary" onclick="releaseInvoice()">Release Escrow</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="log">Ready. Connect MetaMask or Rabby on QDay Aevum Testnet (Chain ID 44005, RPC https://rpc-test.qday.info).</div>
+  </div>
+
+  <script>
+    const AEVUM_CHAIN_HEX = "0xabe5"; // 44005
+    const TUSD8_ADDR = "0x456569838f1d43009A91ebA4263147Afd7233483";
+    const ERC20_ABI = [
+      "function balanceOf(address) view returns (uint256)",
+      "function approve(address,uint256) returns (bool)",
+      "function decimals() view returns (uint8)"
+    ];
+    const ESCROW_ABI = [
+      "function computeHandleHash(string) pure returns (bytes32)",
+      "function registerPayee(string,string) returns (bytes32)",
+      "function createInvoice(address,bytes32,uint256,uint64,uint64,bool,bytes32) returns (uint256)",
+      "function fundInvoice(uint256,bytes32)",
+      "function releaseInvoice(uint256)",
+      "function invoices(uint256) view returns (uint256,address,address,bytes32,uint256,uint64,uint64,uint64,uint64,bool,uint8,bytes32)"
+    ];
+
+    let provider, signer, account;
+
+    function log(msg) {
+      const el = document.getElementById("log");
+      el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}\n` + el.textContent;
+    }
+
+    async function switchAevumNetwork() {
+      if (!window.ethereum) return log("Install MetaMask or Rabby Wallet first.");
+      try {
+        await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: AEVUM_CHAIN_HEX }] });
+        log("Switched to QDay Aevum Testnet (44005).");
+      } catch (e) {
+        await window.ethereum.request({
+          method: "wallet_addEthereumChain",
+          params: [{
+            chainId: AEVUM_CHAIN_HEX,
+            chainName: "QDay Aevum Testnet",
+            nativeCurrency: { name: "tQDAY", symbol: "tQDAY", decimals: 18 },
+            rpcUrls: ["https://rpc-test.qday.info"],
+            blockExplorerUrls: ["https://explorer-test.qday.info"]
+          }]
+        });
+        log("Added and switched to QDay Aevum Testnet (44005).");
+      }
+    }
+
+    async function connectWallet() {
+      if (!window.ethereum) return log("No injected EVM wallet found.");
+      provider = new ethers.BrowserProvider(window.ethereum);
+      await provider.send("eth_requestAccounts", []);
+      signer = await provider.getSigner();
+      account = await signer.getAddress();
+      document.getElementById("walletStatus").textContent = account.slice(0, 6) + "..." + account.slice(-4);
+      const token = new ethers.Contract(TUSD8_ADDR, ERC20_ABI, provider);
+      const bal = await token.balanceOf(account);
+      document.getElementById("balanceStatus").textContent = "tUSD8: " + ethers.formatUnits(bal, 6);
+      log("Connected wallet " + account);
+    }
+
+    function getEscrow() {
+      const addr = document.getElementById("contractAddr").value.trim();
+      if (!ethers.isAddress(addr)) throw new Error("Enter a valid deployed AevumInvoiceEscrow contract address.");
+      return new ethers.Contract(addr, ESCROW_ABI, signer);
+    }
+
+    async function registerPayee() {
+      try {
+        const escrow = getEscrow();
+        const tx = await escrow.registerPayee(
+          document.getElementById("regHandle").value.trim(),
+          document.getElementById("regName").value.trim()
+        );
+        log("RegisterPayee tx sent: " + tx.hash);
+        await tx.wait();
+        log("Payee handle verified on-chain.");
+      } catch (e) { log("Error: " + (e.shortMessage || e.message)); }
+    }
+
+    async function createInvoice() {
+      try {
+        const escrow = getEscrow();
+        const handleStr = document.getElementById("invHandle").value.trim();
+        const handleHash = handleStr ? ethers.keccak256(ethers.toUtf8Bytes(handleStr)) : ethers.ZeroHash;
+        const amount = ethers.parseUnits(document.getElementById("invAmount").value, 6);
+        const dueAt = Math.floor(Date.now() / 1000) + 7 * 86400;
+        const requireConf = document.getElementById("invMode").value === "escrow";
+        const memoHash = ethers.keccak256(ethers.toUtf8Bytes(document.getElementById("invMemo").value || "INV"));
+        const tx = await escrow.createInvoice(
+          document.getElementById("invPayer").value.trim(),
+          handleHash,
+          amount,
+          dueAt,
+          requireConf ? 86400 : 0,
+          requireConf,
+          memoHash
+        );
+        log("CreateInvoice tx sent: " + tx.hash);
+        await tx.wait();
+        log("Invoice created on Aevum Testnet.");
+      } catch (e) { log("Error: " + (e.shortMessage || e.message)); }
+    }
+
+    async function fundInvoice() {
+      try {
+        const escrow = getEscrow();
+        const id = BigInt(document.getElementById("actId").value);
+        const inv = await escrow.invoices(id);
+        const amount = inv[4];
+        const token = new ethers.Contract(TUSD8_ADDR, ERC20_ABI, signer);
+        const appTx = await token.approve(await escrow.getAddress(), amount);
+        log("Approve tUSD8 tx sent: " + appTx.hash);
+        await appTx.wait();
+        const hStr = document.getElementById("actHandle").value.trim();
+        const hHash = hStr ? ethers.keccak256(ethers.toUtf8Bytes(hStr)) : ethers.ZeroHash;
+        const tx = await escrow.fundInvoice(id, hHash);
+        log("FundInvoice tx sent: " + tx.hash);
+        await tx.wait();
+        log("Invoice #" + id + " funded in tUSD8.");
+      } catch (e) { log("Error: " + (e.shortMessage || e.message)); }
+    }
+
+    async function releaseInvoice() {
+      try {
+        const escrow = getEscrow();
+        const id = BigInt(document.getElementById("actId").value);
+        const tx = await escrow.releaseInvoice(id);
+        log("ReleaseInvoice tx sent: " + tx.hash);
+        await tx.wait();
+        log("Invoice #" + id + " released to payee.");
+      } catch (e) { log("Error: " + (e.shortMessage || e.message)); }
+    }
+  </script>
+</body>
+</html>
